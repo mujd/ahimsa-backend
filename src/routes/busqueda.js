@@ -1,14 +1,14 @@
 const express = require('express');
-let app = express();
-let Categoria = require('../models/categoria');
-let Producto = require('../models/producto');
-let Usuario = require('../models/usuario');
+const router = express.Router();
+const Categoria = require('../models/categoria');
+const Producto = require('../models/producto');
+const Usuario = require('../models/usuario');
 
 
 // ==================================================
 // Busqueda por colección
 // ==================================================
-app.get('/coleccion/:tabla/:busqueda', (req, res) => {
+router.get('/coleccion/:tabla/:busqueda', (req, res) => {
     let busqueda = req.params.busqueda;
     let tabla = req.params.tabla;
     let regex = new RegExp(busqueda, 'i');
@@ -37,15 +37,16 @@ app.get('/coleccion/:tabla/:busqueda', (req, res) => {
     promesa.then(data => {
         res.status(200).json({
             ok: true,
-            [tabla]: data
-        });
+            [tabla]: data,
+            total: data.length
+        })
     });
 });
 
 // ==================================================
 // Busqueda general
 // ==================================================
-app.get('/todo/:busqueda', (req, res, next) => {
+router.get('/todo/:busqueda', (req, res, next) => {
 
     let busqueda = req.params.busqueda;
     let regex = new RegExp(busqueda, 'i');
@@ -99,8 +100,14 @@ function buscarProductos(busqueda, regex) {
 
 function buscarUsuarios(busqueda, regex) {
     return new Promise((resolve, reject) => {
-        Usuario.find({}, 'nombre email role')
-            .or([{ 'nombre': regex }, { 'email': regex }])
+        Usuario.find({}, 'nombre email role fechaCreacion estado')
+            .or([
+                { 'nombre': regex },
+                { 'email': regex },
+                { 'role': regex },
+                /* { 'fechaCreacion': regex }, */
+                /* { 'estado': regex } */
+            ])
             .exec((err, usuarios) => {
 
                 if (err) {
@@ -112,4 +119,4 @@ function buscarUsuarios(busqueda, regex) {
     });
 }
 
-module.exports = app;
+module.exports = router;

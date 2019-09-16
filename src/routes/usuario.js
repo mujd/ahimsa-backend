@@ -1,4 +1,5 @@
-const router = require('express').Router();
+const express = require('express');
+const router = express.Router();
 const bcrypt = require('bcryptjs');
 const _ = require('underscore');
 const Usuario = require('../models/usuario');
@@ -8,15 +9,15 @@ const { verificaToken, verificaAdminRole, verificaAdminMismoUsuario } = require(
 // Obtener todos los usuarios
 // ==================================================
 router.get('/', verificaToken, (req, res) => {
-
-    let desde = req.query.desde || 0;
-    desde = Number(desde);
-    let limite = req.query.limite || 5;
-    limite = Number(limite);
-
+    let perPage = req.query.perPage || 10;
+    perPage = Number(perPage);
+    let page = req.query.page || 1;
+    page = Math.max(0, page);
+    page = Number(page);
     Usuario.find({}, 'nombre email role estado fechaCreacion')
-        .skip(desde)
-        .limit(limite)
+        /* .skip((perPage * page) - perPage)
+        .limit(perPage) */
+        .sort({ fechaCreacion: 'asc' })
         .exec((err, usuarios) => {
             if (err) {
                 return res.status(400).json({
@@ -29,7 +30,9 @@ router.get('/', verificaToken, (req, res) => {
                 res.status(200).json({
                     ok: true,
                     usuarios,
-                    total: conteo
+                    /* current_page: page,
+                    total_pages: Math.ceil(conteo / perPage), */
+                    total_usuarios: conteo
                 });
             });
         });
@@ -100,9 +103,18 @@ router.post('/', [verificaToken, verificaAdminRole], function(req, res) {
 // ==================================================
 router.put('/:id', [verificaToken, verificaAdminRole], function(req, res) {
     let id = req.params.id;
-    let body = _.pick(req.body, ['nombre', 'email', 'role']);
+    let body = _.pick(req.body, ['nombre', 'email', 'role', 'estado']);
 
-    Usuario.findByIdAndUpdate(id, body, { new: true, runValidators: true }, (err, usuarioDB) => {
+    let opcion = { email: body.email };
+    Usuario.find(opcion).exec((err, usuarios) => {
+        console.log(usuarios);
+        if (usuarios) {
+            console.log('Email existe');
+        } else {
+            console.log('Email No existe');
+        }
+    });
+    Usuario.findByIdAndUpdate(id, body, { runValidators: false }, (err, usuarioDB) => {
         if (err) {
             return res.status(500).json({
                 ok: false,
@@ -113,7 +125,7 @@ router.put('/:id', [verificaToken, verificaAdminRole], function(req, res) {
         if (!usuarioDB) {
             return res.status(400).json({
                 ok: false,
-                mensaje: 'El usuario con el id ' + id + ' no existe',
+                mensaje: `El usuario con el id "${id}" no existe`,
                 errors: { message: 'No existe un usuario con ese ID' }
             });
         }
@@ -223,11 +235,11 @@ router.put('/cambiar-password/:id', [verificaToken, verificaAdminMismoUsuario], 
         if (!bcrypt.compareSync(body.password, usuario.password)) {
             return res.status(400).json({
                 ok: false,
-                err: { message: 'contraseñas no coinciden' },
-                mensaje: 'Credenciales incorrectas - password'
+                err: { message: 'Contraseñas no coinciden!!' },
+                mensaje: 'Esta no es su contraseña antigua, ingrese los datos correctamente.'
             });
         }
-        usuario.password = bcrypt.hashSync(body.passwordNuevo, 10);
+        usuario.password = bcrypt.hashSync(body.passwordNueva, 10);
 
         usuario.save((err, usuarioGuardado) => {
             if (err) {

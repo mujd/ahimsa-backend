@@ -1,11 +1,13 @@
 const express = require('express');
-const router = express.Router();
+const app = express();
+const Path = require('path');
+/* const app = express.app(); */
 const fileUpload = require('express-fileupload');
 const fs = require('fs');
-const app = express();
 const Usuario = require('../models/usuario');
 const Producto = require('../models/producto');
 const Categoria = require('../models/categoria');
+const { verificaToken, verificaAdminRole, verificaAdminMismoUsuario } = require('../middlewares/autenticacion');
 
 /*
     - 0.5mb = 524288 bytes
@@ -14,13 +16,15 @@ const Categoria = require('../models/categoria');
 */
 let fileSize = Number(524288);
 // default options
-router.use(fileUpload({
+app.use(fileUpload({
     limits: { fileSize: fileSize },
 
 }));
 
-
-router.put('/:tipo/:id', (req, res, next) => {
+// ======================
+// Subida individual de archivos 
+// ======================
+app.put('/:tipo/:id', verificaToken, (req, res, next) => {
 
     let tipo = req.params.tipo;
     let id = req.params.id;
@@ -30,15 +34,15 @@ router.put('/:tipo/:id', (req, res, next) => {
     if (tiposValidos.indexOf(tipo) < 0) {
         return res.status(400).json({
             ok: false,
-            mensaje: 'Tipo de colección no es válida',
-            errors: { message: 'Tipo de colección no es válida' }
+            mensaje: 'Tipo de colección no es válida.',
+            errors: { message: 'Tipo de colección no es válida, colecciones permitidas: categorias, productos, usuarios.' }
         });
     }
     if (!req.files) {
         return res.status(400).json({
             ok: false,
-            mensaje: 'No selecciono nada',
-            errors: { message: 'Debe de seleccionar una imagen' }
+            mensaje: 'No selecciono nada.',
+            errors: { message: 'Debe de seleccionar una imagen.' }
         });
     }
     if (req.files.imagen.truncated) {
@@ -68,8 +72,8 @@ router.put('/:tipo/:id', (req, res, next) => {
     let nombreArchivo = `${ id }-${ new Date().getMilliseconds() }.${ extensionArchivo }`;
     // Mover el archivo del temporal a un path
     let path = `./src/uploads/${ tipo }/${ nombreArchivo }`;
+    /* console.log(path); */
     archivo.mv(path, err => {
-
         if (err) {
             return res.status(500).json({
                 ok: false,
@@ -80,6 +84,79 @@ router.put('/:tipo/:id', (req, res, next) => {
         subirPorTipo(tipo, id, nombreArchivo, res);
     });
 });
+// ======================
+// Subida multiple de archivos 
+// ======================
+app.put('/multiupload/:tipo/:id', verificaToken, (req, res, next) => {
+
+    let tipo = req.params.tipo;
+    let id = req.params.id;
+
+    // tipos de colección
+    let tiposValidos = ['categorias', 'productos', 'usuarios'];
+    if (tiposValidos.indexOf(tipo) < 0) {
+        return res.status(400).json({
+            ok: false,
+            mensaje: 'Tipo de colección no es válida.',
+            errors: { message: 'Tipo de colección no es válida, colecciones permitidas: categorias, productos, usuarios.' }
+        });
+    }
+    if (!req.files) {
+        return res.status(400).json({
+            ok: false,
+            mensaje: 'No selecciono nada.',
+            errors: { message: 'Debe de seleccionar una imagen.' }
+        });
+    }
+    /* if (req.files.imagen.truncated) {
+        return res.status(400).json({
+            ok: false,
+            mensaje: 'Supera el tamaño maximo permitido para un archivo',
+            errors: { message: `El tamaño de su archivo supera el limite esperado. Debe seleccionar archivos con tamaño menor o igual a ${fileSize}bytes (0,5mb, 500kb)` }
+        });
+    } */
+    // Obtener nombre del archivo
+    /* let archivo = req.files.imagen;
+    const element = [];
+    archivo.forEach(el => {
+        element.push(el);
+    });
+    let extensionArchivo = [];
+    let nombreCortado = [];
+    for (let i = 0; i < archivo.length; ++i) {
+        nombreCortado = element[i].name.split('.');
+
+        extensionArchivo = nombreCortado[nombreCortado.length - 1];
+
+        console.log(nombreCortado);
+
+        let extensionesValidas = ['png', 'jpg', 'gif', 'jpeg'];
+        if (extensionesValidas.indexOf(extensionArchivo) < 0) {
+            return res.status(400).json({
+                ok: false,
+                mensaje: 'Extension no válida => ' + extensionArchivo,
+                errors: { message: 'Las extensiones válidas son ' + extensionesValidas.join(', ') }
+            });
+        }
+    }
+    let nombreArchivo = `${ id }-${ new Date().getMilliseconds() }.${ extensionArchivo }`; */
+    /* let path = `./src/uploads/${ tipo }/${ nombreArchivo }`; */
+    let archivo = req.files.imagen;
+    for (let i = 0; i < archivo.length; ++i) {
+        archivo[i].mv(Path.join(__dirname, `../uploads/${tipo}/`, archivo[i].name), err => {
+            /* console.log(Path.join(__dirname, `../uploads/${tipo}/`, archivo[i].name)); */
+            if (err) {
+                return res.status(500).json({
+                    ok: false,
+                    mensaje: 'Error al mover archivo',
+                    errors: err
+                });
+            }
+            subirPorTipo(tipo, id, archivo[i].name, res);
+        });
+    }
+});
+
 
 function subirPorTipo(tipo, id, nombreArchivo, res) {
     if (tipo === 'usuarios') {
@@ -121,15 +198,21 @@ function subirPorTipo(tipo, id, nombreArchivo, res) {
             if (fs.existsSync(pathViejo)) {
                 fs.unlinkSync(pathViejo);
             }
-            producto.img = nombreArchivo;
             producto.save((err, productoActualizado) => {
-
+                if (err) {
+                    return res.status(400).json({
+                        ok: false,
+                        mensaje: 'Error al actualizar imagen del producto',
+                        errors: { message: err }
+                    });
+                }
                 return res.status(200).json({
                     ok: true,
                     mensaje: 'Imagen de producto actualizada',
                     producto: productoActualizado
                 });
             });
+
         });
     }
     if (tipo === 'categorias') {
@@ -202,4 +285,4 @@ function subirPorTipoOtro(tipo, id, path, res) {
             });
 }
 
-module.exports = router;
+module.exports = app;

@@ -6,6 +6,7 @@ const sucursalSchema = new Schema({
     nombre: { type: String, unique: true, required: [true, 'El nombre es necesario'] },
     direccion: { type: String, required: [true, 'La direccion es necesaria'] },
     comuna: { type: String, required: [true, 'La comuna es necesaria'] },
+    estado: { type: Boolean, default: true },
     usuario: { type: Schema.Types.ObjectId, ref: 'Usuario' }
 }, { collection: 'sucursales' });
 

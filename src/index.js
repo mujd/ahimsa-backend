@@ -24,7 +24,12 @@ app.use(express.json());
 app.use(require("./routes/index"));
 
 // Configuración mongo
-mongoose.connect(process.env.URLDB, { useCreateIndex: true, useNewUrlParser: true }, (err, res) => {
+const mongoOptions = {
+    useCreateIndex: true,
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+}
+mongoose.connect(process.env.URLDB, mongoOptions, (err, res) => {
     if (err) throw err;
     console.log("BD: \x1b[32m%s\x1b[0m", "online");
 });
